@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1a1714">
+<title>Kingdom Story</title>
+<style>
+  :root {
+    --bg: #16130f;
+    --bg-soft: #1f1b16;
+    --line: #322c24;
+    --ink: #e9e0d2;
+    --ink-soft: #b3a892;
+    --accent: #c89a5b;
+    --reader-w: 40rem;
+    --fs: 19px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.65;
+    overflow-wrap: break-word;
+  }
+
+  /* Top bar */
+  header {
+    position: sticky; top: 0; z-index: 10;
+    display: flex; align-items: center; gap: .5rem;
+    padding: max(.6rem, env(safe-area-inset-top)) .85rem .6rem;
+    background: rgba(22,19,15,.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
+  }
+  header .title {
+    flex: 1; font-weight: 600; font-size: 1rem;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  button.tb {
+    appearance: none; border: 1px solid var(--line); background: var(--bg-soft);
+    color: var(--ink); border-radius: 9px; padding: .42rem .7rem;
+    font-size: .9rem; cursor: pointer; line-height: 1;
+  }
+  button.tb:active { background: var(--line); }
+  .lang { display: flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+  .lang button {
+    appearance: none; border: 0; background: var(--bg-soft); color: var(--ink-soft);
+    padding: .42rem .6rem; font-size: .82rem; cursor: pointer; font-weight: 600;
+  }
+  .lang button.on { background: var(--accent); color: #2a1d09; }
+
+  main { max-width: var(--reader-w); margin: 0 auto; padding: 0 1.1rem 5rem; }
+
+  /* Chapter list */
+  .act-head {
+    margin: 1.8rem 0 .5rem; font-size: .78rem; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--accent);
+  }
+  a.chapter {
+    display: block; text-decoration: none; color: var(--ink);
+    padding: .85rem 1rem; margin: .45rem 0;
+    background: var(--bg-soft); border: 1px solid var(--line); border-radius: 12px;
+  }
+  a.chapter:active { border-color: var(--accent); }
+  a.chapter .num { color: var(--ink-soft); font-size: .78rem; }
+  a.chapter .name { display: block; font-size: 1.05rem; margin-top: .15rem; }
+
+  /* Reader */
+  article { font-size: var(--fs); padding-top: .5rem; }
+  article h1 { font-size: 1.5em; line-height: 1.25; margin: 1.4rem 0 1rem; }
+  article h2 { font-size: 1.25em; margin: 1.6rem 0 .8rem; }
+  article p { margin: 0 0 1.05rem; }
+  article em { color: var(--ink); }
+  article hr {
+    border: 0; text-align: center; margin: 1.8rem 0;
+    color: var(--accent); overflow: visible;
+  }
+  article hr::before { content: "✦"; font-size: 1rem; }
+  article blockquote {
+    margin: 1rem 0; padding: .2rem 0 .2rem 1rem;
+    border-left: 2px solid var(--accent); color: var(--ink-soft); font-style: italic;
+  }
+  article table { border-collapse: collapse; width: 100%; font-size: .9em; margin: 1rem 0; }
+  article th, article td { border: 1px solid var(--line); padding: .4rem .55rem; text-align: left; }
+  article code { background: var(--bg-soft); padding: .1em .35em; border-radius: 5px; font-size: .85em; }
+
+  .empty { color: var(--ink-soft); text-align: center; margin-top: 3rem; }
+  .reading { display: none; }
+
+  /* Inline editing */
+  #edit.on { background: var(--accent); color: #2a1d09; }
+  .blk { padding: .05rem .45rem; margin: 0 -.45rem; border-radius: 9px; }
+  body.editing .blk { cursor: text; }
+  body.editing .blk:active { background: var(--bg-soft); }
+  body.editing .blk.hint { box-shadow: inset 0 0 0 1px var(--line); }
+  .blk > :first-child { margin-top: 0; }
+  .blk > :last-child { margin-bottom: 0; }
+  .edit-ta {
+    width: 100%; display: block; box-sizing: border-box;
+    font: inherit; font-size: .96em; line-height: 1.6; color: var(--ink);
+    background: #0c0a07; border: 1px solid var(--accent); border-radius: 9px;
+    padding: .6rem .65rem; resize: none; overflow: hidden; outline: none;
+  }
+  .edit-bar { display: flex; gap: .5rem; margin: .5rem 0 .2rem; }
+  .edit-bar button { flex: 0 0 auto; }
+  .edit-bar .save { background: var(--accent); color: #2a1d09; border-color: var(--accent); }
+  .toast {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: calc(env(safe-area-inset-bottom) + 4.2rem);
+    background: var(--bg-soft); border: 1px solid var(--line); color: var(--ink);
+    padding: .5rem .9rem; border-radius: 10px; font-size: .85rem;
+    opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 20;
+  }
+  .toast.show { opacity: 1; }
+
+  footer {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    display: none; gap: .5rem; justify-content: center;
+    padding: .55rem .85rem max(.55rem, env(safe-area-inset-bottom));
+    background: rgba(22,19,15,.94); backdrop-filter: blur(8px);
+    border-top: 1px solid var(--line);
+  }
+  footer.show { display: flex; }
+  footer button { flex: 1; max-width: 11rem; }
+</style>
+</head>
+<body>
+<header>
+  <button class="tb" id="back" style="display:none">‹ Back</button>
+  <div class="title" id="title">Kingdom Story</div>
+  <div class="lang" id="lang"></div>
+  <button class="tb" id="edit" style="display:none">✎</button>
+  <button class="tb" id="fs">A±</button>
+</header>
+
+<main>
+  <div id="list"></div>
+  <article id="reader" class="reading"></article>
+</main>
+
+<footer id="nav">
+  <button class="tb" id="prev">‹ Prev</button>
+  <button class="tb" id="next">Next ›</button>
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script src="vendor/marked.min.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const state = { files: [], langs: [], lang: localStorage.lang || null,
+                current: null, front: '', body: '', blocks: [], editMode: false,
+                canEdit: false };
+
+// Use the local server's API when available (editing enabled); otherwise fall
+// back to the static files shipped to GitHub Pages (read-only).
+async function loadFiles(){
+  try {
+    const r = await fetch('/api/files');
+    if(r.ok){ state.canEdit = true; return await r.json(); }
+  } catch(e){ /* no local server — static deploy */ }
+  state.canEdit = false;
+  return await (await fetch('files.json')).json();
+}
+async function loadFile(path){
+  if(state.canEdit)
+    return await (await fetch('/api/file?path='+encodeURIComponent(path))).text();
+  return await (await fetch('content/'+path)).text();
+}
+
+const FS_STEPS = [16,18,19,21,23,26];
+let fsIdx = +localStorage.fsIdx || 2;
+function applyFS(){ document.documentElement.style.setProperty('--fs', FS_STEPS[fsIdx]+'px'); }
+applyFS();
+$('#fs').onclick = () => { fsIdx = (fsIdx+1)%FS_STEPS.length; localStorage.fsIdx=fsIdx; applyFS(); };
+
+// path -> {lang, act, num, name, path}
+function meta(p){
+  const seg = p.split('/');
+  const lang = seg[0];
+  const act = (seg.find(s=>/^act/i.test(s))||'').replace(/-/g,' ');
+  const file = seg[seg.length-1].replace(/\.md$/,'');
+  const m = file.match(/^ch0*(\d+)[-_]?(.*)$/i);
+  const num = m ? m[1] : '';
+  const name = (m ? m[2] : file).replace(/[-_]/g,' ').replace(/\b\w/g, c=>c.toUpperCase()).trim() || file;
+  return { lang, act, num, name, path: p };
+}
+
+async function boot(){
+  state.files = await loadFiles();
+  const metas = state.files.map(meta);
+  state.langs = [...new Set(metas.filter(m=>['en','ru'].includes(m.lang)).map(m=>m.lang))];
+  if(!state.langs.length) state.langs = [...new Set(metas.map(m=>m.lang))];
+  if(!state.langs.includes(state.lang)) state.lang = state.langs[0] || null;
+  buildLangToggle();
+  renderList();
+  // restore last read
+  if(localStorage.lastPath && state.files.includes(localStorage.lastPath)){
+    openChapter(localStorage.lastPath, false);
+  }
+}
+
+function buildLangToggle(){
+  const box = $('#lang'); box.innerHTML='';
+  if(state.langs.length < 2){ box.style.display='none'; return; }
+  state.langs.forEach(l=>{
+    const b = document.createElement('button');
+    b.textContent = l.toUpperCase();
+    b.className = l===state.lang ? 'on' : '';
+    b.onclick = () => {
+      // if reading, try to switch to same chapter in other language
+      if(state.current){
+        const alt = state.current.replace(/^[^/]+\//, l+'/');
+        state.lang = l; localStorage.lang=l; buildLangToggle();
+        if(state.files.includes(alt)) openChapter(alt, true); else { state.current=null; showList(); }
+      } else { state.lang=l; localStorage.lang=l; buildLangToggle(); renderList(); }
+    };
+    box.appendChild(b);
+  });
+}
+
+function chaptersForLang(){
+  return state.files.map(meta).filter(m => m.lang === state.lang)
+    .sort((a,b)=> (a.act+a.num).localeCompare(b.act+b.num, undefined, {numeric:true}));
+}
+
+function renderList(){
+  const list = $('#list'); list.innerHTML='';
+  const items = chaptersForLang();
+  if(!items.length){ list.innerHTML='<p class="empty">No chapters found.</p>'; return; }
+  let lastAct = null;
+  items.forEach(m=>{
+    if(m.act !== lastAct){
+      lastAct = m.act;
+      if(m.act){ const h=document.createElement('div'); h.className='act-head'; h.textContent=m.act; list.appendChild(h); }
+    }
+    const a = document.createElement('a');
+    a.className='chapter'; a.href='#';
+    a.innerHTML = `<span class="num">${m.num?('Chapter '+m.num):''}</span><span class="name">${m.name}</span>`;
+    a.onclick = e => { e.preventDefault(); openChapter(m.path, true); };
+    list.appendChild(a);
+  });
+}
+
+function splitFront(md){
+  const m = md.match(/^\s*<!--[\s\S]*?-->\s*/);
+  return m ? { front: m[0], body: md.slice(m[0].length) } : { front: '', body: md };
+}
+
+async function openChapter(path, scrollTop){
+  const md = await loadFile(path);
+  const { front, body } = splitFront(md);
+  state.current = path; state.front = front; state.body = body;
+  localStorage.lastPath = path;
+  renderReader();
+  const m = meta(path);
+  $('#title').textContent = m.num ? `Ch. ${m.num} — ${m.name}` : m.name;
+  showReader();
+  if(scrollTop) window.scrollTo(0,0);
+  else { const y=+sessionStorage['scroll:'+path]||0; window.scrollTo(0,y); }
+  updateNav();
+}
+
+function renderReader(){
+  if(state.editMode) renderBlocks();
+  else $('#reader').innerHTML = marked.parse(state.body);
+}
+
+// ---- inline editing ----
+function renderBlocks(){
+  const r = $('#reader'); r.innerHTML='';
+  state.blocks = state.body.split(/\n{2,}/);
+  state.blocks.forEach((blk, i)=>{
+    const w = document.createElement('div');
+    w.className='blk hint'; w.dataset.i=i;
+    w.innerHTML = marked.parse(blk);
+    w.onclick = ()=> editBlock(w, i);
+    r.appendChild(w);
+  });
+}
+
+function autogrow(ta){ ta.style.height='auto'; ta.style.height = ta.scrollHeight+'px'; }
+
+function showBlock(w, i){
+  w.className='blk hint'; w.innerHTML = marked.parse(state.blocks[i]);
+  w.onclick = ()=> editBlock(w, i);
+}
+
+function editBlock(w, i){
+  if(w.querySelector('textarea')) return;        // already editing
+  w.className='blk'; w.onclick=null; w.innerHTML='';
+  const ta = document.createElement('textarea');
+  ta.className='edit-ta'; ta.value = state.blocks[i];
+  const bar = document.createElement('div'); bar.className='edit-bar';
+  const save = document.createElement('button'); save.className='tb save'; save.textContent='Save';
+  const cancel = document.createElement('button'); cancel.className='tb'; cancel.textContent='Cancel';
+  bar.append(save, cancel);
+  w.append(ta, bar);
+  autogrow(ta); ta.focus();
+  ta.addEventListener('input', ()=>autogrow(ta));
+  cancel.onclick = e => { e.stopPropagation(); showBlock(w, i); };
+  save.onclick = async e => {
+    e.stopPropagation();
+    state.blocks[i] = ta.value;
+    state.body = state.blocks.join('\n\n');
+    showBlock(w, i);
+    await saveFile();
+  };
+}
+
+async function saveFile(){
+  try {
+    const res = await fetch('/api/file?path='+encodeURIComponent(state.current), {
+      method:'PUT', headers:{'Content-Type':'text/markdown; charset=utf-8'},
+      body: state.front + state.body });
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    flash('Saved ✓');
+  } catch(e){ flash('Save failed — '+e.message); }
+}
+
+let toastT;
+function flash(msg){
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(()=>t.classList.remove('show'), 1600);
+}
+
+$('#edit').onclick = ()=>{
+  state.editMode = !state.editMode;
+  $('#edit').classList.toggle('on', state.editMode);
+  document.body.classList.toggle('editing', state.editMode);
+  const y = window.scrollY;
+  renderReader();
+  window.scrollTo(0, y);
+  flash(state.editMode ? 'Tap any paragraph to edit' : 'Done editing');
+};
+
+function showReader(){
+  $('#list').style.display='none';
+  $('#reader').style.display='block';
+  $('#back').style.display='';
+  $('#edit').style.display = state.canEdit ? '' : 'none';
+  $('#nav').classList.add('show');
+}
+function showList(){
+  $('#reader').style.display='none';
+  $('#list').style.display='block';
+  $('#back').style.display='none';
+  $('#edit').style.display='none';
+  $('#nav').classList.remove('show');
+  $('#title').textContent='Kingdom Story';
+  state.current=null;
+  if(state.editMode){            // leave edit mode when returning to the list
+    state.editMode=false;
+    $('#edit').classList.remove('on');
+    document.body.classList.remove('editing');
+  }
+  renderList();
+}
+$('#back').onclick = showList;
+
+function updateNav(){
+  const items = chaptersForLang().map(m=>m.path);
+  const i = items.indexOf(state.current);
+  $('#prev').disabled = i<=0;
+  $('#next').disabled = i<0 || i>=items.length-1;
+  $('#prev').onclick = ()=> i>0 && openChapter(items[i-1], true);
+  $('#next').onclick = ()=> i<items.length-1 && openChapter(items[i+1], true);
+}
+
+// remember scroll position per chapter
+addEventListener('scroll', ()=>{ if(state.current) sessionStorage['scroll:'+state.current]=window.scrollY; }, {passive:true});
+
+boot().catch(e=>{ $('#list').innerHTML='<p class="empty">Could not load book.<br>'+e+'</p>'; });
+</script>
+</body>
+</html>
