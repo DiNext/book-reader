@@ -32,7 +32,8 @@ def main():
     shutil.copytree(os.path.join(HERE, "vendor"), os.path.join(OUT, "vendor"))
 
     # Chapters → docs/content/<rel>, and a manifest the static app reads.
-    files = list_files()
+    # Russian-only edition: ship just the ru/ chapters (no EN on the public site).
+    files = [f for f in list_files() if f.split("/")[0] == "ru"]
     for rel in files:
         dst = os.path.join(OUT, "content", *rel.split("/"))
         os.makedirs(os.path.dirname(dst), exist_ok=True)
