@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1a1714">
-<title>Kingdom Story</title>
+<title>Королевская история</title>
 <style>
   :root {
     --bg: #16130f;
@@ -123,8 +123,8 @@
 </head>
 <body>
 <header>
-  <button class="tb" id="back" style="display:none">‹ Back</button>
-  <div class="title" id="title">Kingdom Story</div>
+  <button class="tb" id="back" style="display:none">‹ Назад</button>
+  <div class="title" id="title">Королевская история</div>
   <button class="tb" id="edit" style="display:none">✎</button>
   <button class="tb" id="fs">A±</button>
 </header>
@@ -135,8 +135,8 @@
 </main>
 
 <footer id="nav">
-  <button class="tb" id="prev">‹ Prev</button>
-  <button class="tb" id="next">Next ›</button>
+  <button class="tb" id="prev">‹ Пред.</button>
+  <button class="tb" id="next">След. ›</button>
 </footer>
 
 <div class="toast" id="toast"></div>
@@ -145,9 +145,10 @@
 <script>
 const $ = s => document.querySelector(s);
 const LANG = 'ru';   // Russian-only reader
+const BOOK_TITLE = 'Королевская история';
 const state = { files: [], lang: LANG,
                 current: null, front: '', body: '', blocks: [], editMode: false,
-                canEdit: false };
+                canEdit: false, cache: {}, titles: {} };
 
 // Use the local server's API when available (editing enabled); otherwise fall
 // back to the static files shipped to GitHub Pages (read-only).
@@ -163,6 +164,29 @@ async function loadFile(path){
   if(state.canEdit)
     return await (await fetch('/api/file?path='+encodeURIComponent(path))).text();
   return await (await fetch('content/'+path)).text();
+}
+// Fetch a chapter once and cache it, so building the contents list doesn't
+// re-download files when you open them.
+async function getMd(path){
+  if(state.cache[path] != null) return state.cache[path];
+  const md = await loadFile(path);
+  state.cache[path] = md;
+  return md;
+}
+
+// Russian chapter title taken from the first "# ..." heading in the file,
+// with a leading "Глава … —" prefix stripped so the list isn't repetitive.
+function titleFromMd(md, fallback){
+  const h1 = md.match(/^#\s+(.+?)\s*$/m);
+  let t = h1 ? h1[1].trim() : fallback;
+  const parts = t.split(/\s+[—–-]\s+/);
+  if(parts.length > 1 && /глава/i.test(parts[0])) t = parts.slice(1).join(' — ').trim();
+  return t || fallback;
+}
+// "act-1" → "Часть 1"
+function actLabel(act){
+  const n = (act.match(/\d+/) || [])[0];
+  return n ? 'Часть ' + n : act;
 }
 
 const FS_STEPS = [16,18,19,21,23,26];
@@ -185,12 +209,22 @@ function meta(p){
 
 async function boot(){
   state.files = await loadFiles();
+  await buildToc();
   renderList();
   // restore last read (only if it belongs to the Russian edition)
   if(localStorage.lastPath && state.files.includes(localStorage.lastPath)
      && meta(localStorage.lastPath).lang === LANG){
     openChapter(localStorage.lastPath, false);
   }
+}
+
+// Pre-load Russian chapters to read their titles for the contents list.
+async function buildToc(){
+  const items = state.files.map(meta).filter(m => m.lang === LANG);
+  await Promise.all(items.map(async m => {
+    const { body } = splitFront(await getMd(m.path));
+    state.titles[m.path] = titleFromMd(body, m.name);
+  }));
 }
 
 function chaptersForLang(){
@@ -201,16 +235,17 @@ function chaptersForLang(){
 function renderList(){
   const list = $('#list'); list.innerHTML='';
   const items = chaptersForLang();
-  if(!items.length){ list.innerHTML='<p class="empty">No chapters found.</p>'; return; }
+  if(!items.length){ list.innerHTML='<p class="empty">Главы не найдены.</p>'; return; }
   let lastAct = null;
   items.forEach(m=>{
     if(m.act !== lastAct){
       lastAct = m.act;
-      if(m.act){ const h=document.createElement('div'); h.className='act-head'; h.textContent=m.act; list.appendChild(h); }
+      if(m.act){ const h=document.createElement('div'); h.className='act-head'; h.textContent=actLabel(m.act); list.appendChild(h); }
     }
     const a = document.createElement('a');
     a.className='chapter'; a.href='#';
-    a.innerHTML = `<span class="num">${m.num?('Chapter '+m.num):''}</span><span class="name">${m.name}</span>`;
+    const name = state.titles[m.path] || m.name;
+    a.innerHTML = `<span class="num">${m.num?('Глава '+m.num):''}</span><span class="name">${name}</span>`;
     a.onclick = e => { e.preventDefault(); openChapter(m.path, true); };
     list.appendChild(a);
   });
@@ -222,13 +257,14 @@ function splitFront(md){
 }
 
 async function openChapter(path, scrollTop){
-  const md = await loadFile(path);
+  const md = await getMd(path);
   const { front, body } = splitFront(md);
   state.current = path; state.front = front; state.body = body;
   localStorage.lastPath = path;
   renderReader();
   const m = meta(path);
-  $('#title').textContent = m.num ? `Ch. ${m.num} — ${m.name}` : m.name;
+  const name = state.titles[path] || titleFromMd(body, m.name);
+  $('#title').textContent = m.num ? `Глава ${m.num} — ${name}` : name;
   showReader();
   if(scrollTop) window.scrollTo(0,0);
   else { const y=+sessionStorage['scroll:'+path]||0; window.scrollTo(0,y); }
@@ -266,8 +302,8 @@ function editBlock(w, i){
   const ta = document.createElement('textarea');
   ta.className='edit-ta'; ta.value = state.blocks[i];
   const bar = document.createElement('div'); bar.className='edit-bar';
-  const save = document.createElement('button'); save.className='tb save'; save.textContent='Save';
-  const cancel = document.createElement('button'); cancel.className='tb'; cancel.textContent='Cancel';
+  const save = document.createElement('button'); save.className='tb save'; save.textContent='Сохранить';
+  const cancel = document.createElement('button'); cancel.className='tb'; cancel.textContent='Отмена';
   bar.append(save, cancel);
   w.append(ta, bar);
   autogrow(ta); ta.focus();
@@ -284,12 +320,16 @@ function editBlock(w, i){
 
 async function saveFile(){
   try {
+    const full = state.front + state.body;
     const res = await fetch('/api/file?path='+encodeURIComponent(state.current), {
       method:'PUT', headers:{'Content-Type':'text/markdown; charset=utf-8'},
-      body: state.front + state.body });
+      body: full });
     if(!res.ok) throw new Error('HTTP '+res.status);
-    flash('Saved ✓');
-  } catch(e){ flash('Save failed — '+e.message); }
+    // keep cache & contents-list title in sync with the edit
+    state.cache[state.current] = full;
+    state.titles[state.current] = titleFromMd(state.body, meta(state.current).name);
+    flash('Сохранено ✓');
+  } catch(e){ flash('Ошибка сохранения — '+e.message); }
 }
 
 let toastT;
@@ -305,7 +345,7 @@ $('#edit').onclick = ()=>{
   const y = window.scrollY;
   renderReader();
   window.scrollTo(0, y);
-  flash(state.editMode ? 'Tap any paragraph to edit' : 'Done editing');
+  flash(state.editMode ? 'Нажмите на абзац, чтобы редактировать' : 'Готово');
 };
 
 function showReader(){
@@ -321,7 +361,7 @@ function showList(){
   $('#back').style.display='none';
   $('#edit').style.display='none';
   $('#nav').classList.remove('show');
-  $('#title').textContent='Kingdom Story';
+  $('#title').textContent=BOOK_TITLE;
   state.current=null;
   if(state.editMode){            // leave edit mode when returning to the list
     state.editMode=false;
@@ -344,7 +384,7 @@ function updateNav(){
 // remember scroll position per chapter
 addEventListener('scroll', ()=>{ if(state.current) sessionStorage['scroll:'+state.current]=window.scrollY; }, {passive:true});
 
-boot().catch(e=>{ $('#list').innerHTML='<p class="empty">Could not load book.<br>'+e+'</p>'; });
+boot().catch(e=>{ $('#list').innerHTML='<p class="empty">Не удалось загрузить книгу.<br>'+e+'</p>'; });
 </script>
 </body>
 </html>
