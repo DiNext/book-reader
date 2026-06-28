@@ -13,8 +13,18 @@
     --ink: #e9e0d2;
     --ink-soft: #b3a892;
     --accent: #c89a5b;
+    --bar: rgba(22,19,15,.92);
+    --field: #0c0a07;
     --reader-w: 40rem;
     --fs: 19px;
+  }
+  html[data-theme="sepia"] {
+    --bg: #ece2cf; --bg-soft: #f4ecdb; --line: #d9cbb0; --ink: #4a3f2e;
+    --ink-soft: #7a6a4f; --accent: #9a6b1f; --bar: rgba(236,226,207,.92); --field: #fff8ea;
+  }
+  html[data-theme="light"] {
+    --bg: #f6f2ea; --bg-soft: #fffdf8; --line: #e2d9c8; --ink: #2a241c;
+    --ink-soft: #6b5f4d; --accent: #9a6b1f; --bar: rgba(246,242,234,.92); --field: #fffdf8;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; padding: 0; }
@@ -31,7 +41,7 @@
     position: sticky; top: 0; z-index: 10;
     display: flex; align-items: center; gap: .5rem;
     padding: max(.6rem, env(safe-area-inset-top)) .85rem .6rem;
-    background: rgba(22,19,15,.92);
+    background: var(--bar);
     backdrop-filter: blur(8px);
     border-bottom: 1px solid var(--line);
   }
@@ -45,6 +55,7 @@
     font-size: .9rem; cursor: pointer; line-height: 1;
   }
   button.tb:active { background: var(--line); }
+  button.tb:disabled { opacity: .35; }
 
   main { max-width: var(--reader-w); margin: 0 auto; padding: 0 1.1rem 5rem; }
 
@@ -64,6 +75,7 @@
 
   /* Reader */
   article { font-size: var(--fs); padding-top: .5rem; }
+  html[data-font="serif"] article { font-family: Georgia, "PT Serif", "Times New Roman", serif; }
   article h1 { font-size: 1.5em; line-height: 1.25; margin: 1.4rem 0 1rem; }
   article h2 { font-size: 1.25em; margin: 1.6rem 0 .8rem; }
   article p { margin: 0 0 1.05rem; }
@@ -95,12 +107,18 @@
   .edit-ta {
     width: 100%; display: block; box-sizing: border-box;
     font: inherit; font-size: .96em; line-height: 1.6; color: var(--ink);
-    background: #0c0a07; border: 1px solid var(--accent); border-radius: 9px;
+    background: var(--field); border: 1px solid var(--accent); border-radius: 9px;
     padding: .6rem .65rem; resize: none; overflow: hidden; outline: none;
   }
-  .edit-bar { display: flex; gap: .5rem; margin: .5rem 0 .2rem; }
+  .edit-bar { display: flex; flex-wrap: wrap; gap: .5rem; margin: .5rem 0 .2rem; }
   .edit-bar button { flex: 0 0 auto; }
+  .edit-bar.ops { margin-top: .35rem; }
   .edit-bar .save { background: var(--accent); color: #2a1d09; border-color: var(--accent); }
+  .edit-bar .del { color: #d98b6a; margin-left: auto; }
+  .blk-add {
+    display: block; width: 100%; margin: .3rem 0 1.2rem; color: var(--ink-soft);
+    border-style: dashed;
+  }
   .toast {
     position: fixed; left: 50%; transform: translateX(-50%);
     bottom: calc(env(safe-area-inset-bottom) + 4.2rem);
@@ -110,11 +128,65 @@
   }
   .toast.show { opacity: 1; }
 
+  /* Search match highlight after jumping to a result */
+  .search-hit {
+    background: rgba(200,154,91,.26);
+    box-shadow: 0 0 0 .4rem rgba(200,154,91,.26); border-radius: 6px;
+    transition: background .5s, box-shadow .5s;
+  }
+
+  /* Search overlay */
+  .overlay {
+    position: fixed; inset: 0; z-index: 30; background: var(--bg);
+    display: none; flex-direction: column;
+    padding: max(.6rem, env(safe-area-inset-top)) 1.1rem env(safe-area-inset-bottom);
+  }
+  .overlay.open { display: flex; }
+  .ov-bar { display: flex; gap: .5rem; align-items: center; padding-bottom: .6rem; border-bottom: 1px solid var(--line); }
+  #search-in {
+    flex: 1; min-width: 0; font: inherit; font-size: 1rem; color: var(--ink);
+    background: var(--field); border: 1px solid var(--line); border-radius: 9px;
+    padding: .5rem .7rem; outline: none;
+  }
+  #search-res { overflow: auto; padding: .6rem 0 1rem; max-width: var(--reader-w); width: 100%; margin: 0 auto; }
+  .sr {
+    display: block; width: 100%; text-align: left; background: var(--bg-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: .6rem .75rem;
+    margin: .45rem 0; color: var(--ink); cursor: pointer; font: inherit;
+  }
+  .sr:active { border-color: var(--accent); }
+  .sr .sr-ch { color: var(--accent); font-size: .76rem; }
+  .sr .sr-sn { display: block; margin-top: .2rem; font-size: .92rem; color: var(--ink-soft); line-height: 1.5; }
+  .sr mark { background: rgba(200,154,91,.4); color: var(--ink); padding: 0 .1em; border-radius: 3px; }
+  .sr-msg { color: var(--ink-soft); text-align: center; margin-top: 2rem; }
+
+  /* Settings sheet */
+  .sheet-back { position: fixed; inset: 0; z-index: 30; background: rgba(0,0,0,.45); display: none; align-items: flex-end; }
+  .sheet-back.open { display: flex; }
+  .sheet {
+    width: 100%; max-width: var(--reader-w); margin: 0 auto; background: var(--bg);
+    border-top: 1px solid var(--line); border-radius: 16px 16px 0 0;
+    padding: 1rem 1.1rem calc(env(safe-area-inset-bottom) + 1.1rem);
+  }
+  .sheet h3 { margin: .1rem 0 1rem; font-size: 1rem; }
+  .sheet-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin: .8rem 0; }
+  .sheet-row > span { color: var(--ink-soft); font-size: .9rem; flex: 0 0 auto; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+  .seg button {
+    appearance: none; border: 0; background: var(--bg-soft); color: var(--ink-soft);
+    padding: .45rem .7rem; font: inherit; font-size: .85rem; cursor: pointer;
+  }
+  .seg button.on { background: var(--accent); color: #2a1d09; font-weight: 600; }
+  .fs-slider { display: flex; align-items: center; gap: .6rem; flex: 1; max-width: 16rem; }
+  .fs-slider .fs-min { font-size: .8rem; color: var(--ink-soft); }
+  .fs-slider .fs-max { font-size: 1.3rem; color: var(--ink-soft); }
+  #fs-range { flex: 1; accent-color: var(--accent); }
+
   footer {
     position: fixed; left: 0; right: 0; bottom: 0;
     display: none; gap: .5rem; justify-content: center;
     padding: .55rem .85rem max(.55rem, env(safe-area-inset-bottom));
-    background: rgba(22,19,15,.94); backdrop-filter: blur(8px);
+    background: var(--bar); backdrop-filter: blur(8px);
     border-top: 1px solid var(--line);
   }
   footer.show { display: flex; }
@@ -125,8 +197,11 @@
 <header>
   <button class="tb" id="back" style="display:none">‹ Назад</button>
   <div class="title" id="title">Еретик</div>
-  <button class="tb" id="edit" style="display:none">✎</button>
-  <button class="tb" id="fs">A±</button>
+  <button class="tb" id="undo" style="display:none" title="Отменить">↶</button>
+  <button class="tb" id="redo" style="display:none" title="Повторить">↷</button>
+  <button class="tb" id="search" title="Поиск">🔍</button>
+  <button class="tb" id="edit" style="display:none" title="Редактировать">✎</button>
+  <button class="tb" id="cog" title="Настройки">⚙</button>
 </header>
 
 <main>
@@ -141,6 +216,45 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- Search -->
+<div class="overlay" id="search-ov">
+  <div class="ov-bar">
+    <input id="search-in" type="search" placeholder="Поиск по книге…" autocomplete="off">
+    <button class="tb" id="search-close">Закрыть</button>
+  </div>
+  <div id="search-res"></div>
+</div>
+
+<!-- Settings -->
+<div class="sheet-back" id="cog-ov">
+  <div class="sheet">
+    <h3>Настройки</h3>
+    <div class="sheet-row">
+      <span>Тема</span>
+      <div class="seg" id="seg-theme">
+        <button data-val="dark">Тёмная</button>
+        <button data-val="sepia">Сепия</button>
+        <button data-val="light">Светлая</button>
+      </div>
+    </div>
+    <div class="sheet-row">
+      <span>Шрифт</span>
+      <div class="seg" id="seg-font">
+        <button data-val="sans">Без засечек</button>
+        <button data-val="serif">С засечками</button>
+      </div>
+    </div>
+    <div class="sheet-row">
+      <span>Размер</span>
+      <div class="fs-slider">
+        <span class="fs-min">A</span>
+        <input type="range" id="fs-range" min="0" step="1">
+        <span class="fs-max">A</span>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="vendor/marked.min.js"></script>
 <script>
 const $ = s => document.querySelector(s);
@@ -148,7 +262,8 @@ const LANG = 'ru';   // Russian-only reader
 const BOOK_TITLE = 'Еретик';
 const state = { files: [], lang: LANG,
                 current: null, front: '', body: '', blocks: [], editMode: false,
-                canEdit: false, cache: {}, titles: {} };
+                canEdit: false, cache: {}, titles: {},
+                history: [], future: [], pendingEdit: null, pendingFind: null };
 
 // Use the local server's API when available (editing enabled); otherwise fall
 // back to the static files shipped to GitHub Pages (read-only).
@@ -189,11 +304,107 @@ function actLabel(act){
   return n ? 'Часть ' + n : act;
 }
 
-const FS_STEPS = [16,18,19,21,23,26];
-let fsIdx = +localStorage.fsIdx || 2;
-function applyFS(){ document.documentElement.style.setProperty('--fs', FS_STEPS[fsIdx]+'px'); }
-applyFS();
-$('#fs').onclick = () => { fsIdx = (fsIdx+1)%FS_STEPS.length; localStorage.fsIdx=fsIdx; applyFS(); };
+// ---- settings: theme, font, size ----
+const FS_STEPS = [15,16,17,18,19,20,22,24,27,30];
+const root = document.documentElement;
+let fsIdx = localStorage.fsIdx != null ? +localStorage.fsIdx : 4;
+function applyFS(){ root.style.setProperty('--fs', FS_STEPS[fsIdx]+'px'); }
+function applyTheme(){ root.dataset.theme = localStorage.theme || 'dark'; }
+function applyFont(){ root.dataset.font = localStorage.font || 'sans'; }
+applyTheme(); applyFont(); applyFS();
+
+function syncSeg(id, val){
+  document.querySelectorAll('#'+id+' button').forEach(b=> b.classList.toggle('on', b.dataset.val===val));
+}
+$('#cog').onclick = ()=>{
+  syncSeg('seg-theme', localStorage.theme || 'dark');
+  syncSeg('seg-font', localStorage.font || 'sans');
+  const r = $('#fs-range'); r.max = FS_STEPS.length-1; r.value = fsIdx;
+  $('#cog-ov').classList.add('open');
+};
+$('#cog-ov').onclick = e=>{ if(e.target === $('#cog-ov')) $('#cog-ov').classList.remove('open'); };
+$('#seg-theme').onclick = e=>{ const v=e.target.dataset.val; if(v){ localStorage.theme=v; applyTheme(); syncSeg('seg-theme', v); } };
+$('#seg-font').onclick  = e=>{ const v=e.target.dataset.val; if(v){ localStorage.font=v;  applyFont();  syncSeg('seg-font', v); } };
+$('#fs-range').oninput  = e=>{ fsIdx=+e.target.value; localStorage.fsIdx=fsIdx; applyFS(); };
+
+// ---- search ----
+function escHtml(s){ return s.replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function openSearch(){
+  $('#search-ov').classList.add('open');
+  $('#search-in').value='';
+  $('#search-res').innerHTML='<p class="sr-msg">Введите слово для поиска.</p>';
+  setTimeout(()=>$('#search-in').focus(), 50);
+}
+function closeSearch(){ $('#search-ov').classList.remove('open'); }
+$('#search').onclick = openSearch;
+$('#search-close').onclick = closeSearch;
+
+let searchT;
+$('#search-in').addEventListener('input', e=>{
+  clearTimeout(searchT);
+  const q = e.target.value.trim();
+  searchT = setTimeout(()=> runSearch(q), 150);
+});
+
+function makeSnippet(body, idx, len){
+  const start = Math.max(0, idx-40), end = Math.min(body.length, idx+len+70);
+  const raw = body.slice(start, end);
+  const p = idx - start;
+  const clean = t => escHtml(t.replace(/\n+/g, ' '));
+  const pre = start>0 ? '…' : '', post = end<body.length ? '…' : '';
+  return pre + clean(raw.slice(0,p)) + '<mark>' + clean(raw.slice(p,p+len)) + '</mark>'
+       + clean(raw.slice(p+len)) + post;
+}
+
+function runSearch(q){
+  const res = $('#search-res');
+  if(q.length < 2){ res.innerHTML='<p class="sr-msg">Введите минимум 2 символа.</p>'; return; }
+  const ql = q.toLowerCase();
+  const out = [];
+  chaptersForLang().forEach(m=>{
+    const md = state.cache[m.path]; if(md == null) return;
+    const body = splitFront(md).body, lc = body.toLowerCase();
+    let from = 0, hits = 0, idx;
+    while((idx = lc.indexOf(ql, from)) !== -1 && hits < 3){
+      out.push({ path:m.path, num:m.num, title: state.titles[m.path] || m.name,
+                 snippet: makeSnippet(body, idx, q.length) });
+      hits++; from = idx + ql.length;
+    }
+  });
+  if(!out.length){ res.innerHTML='<p class="sr-msg">Ничего не найдено.</p>'; return; }
+  res.innerHTML='';
+  out.forEach(o=>{
+    const b = document.createElement('button'); b.className='sr';
+    b.innerHTML = `<span class="sr-ch">Глава ${o.num} · ${escHtml(o.title)}</span>`
+                + `<span class="sr-sn">${o.snippet}</span>`;
+    b.onclick = ()=>{ closeSearch(); jumpTo(o.path, q); };
+    res.appendChild(b);
+  });
+}
+
+async function jumpTo(path, q){
+  if(state.editMode){
+    state.editMode=false; $('#edit').classList.remove('on'); document.body.classList.remove('editing');
+  }
+  state.pendingFind = q;
+  await openChapter(path, true);
+}
+
+function highlightFind(q){
+  const ql = q.toLowerCase();
+  for(const n of $('#reader').querySelectorAll('p,h1,h2,h3,li,blockquote,td')){
+    if(n.textContent.toLowerCase().includes(ql)){
+      n.classList.add('search-hit');
+      n.scrollIntoView({block:'center'});
+      setTimeout(()=> n.classList.remove('search-hit'), 2600);
+      break;
+    }
+  }
+}
+
+addEventListener('keydown', e=>{
+  if(e.key === 'Escape'){ closeSearch(); $('#cog-ov').classList.remove('open'); }
+});
 
 // path -> {lang, act, num, name, path}
 function meta(p){
@@ -260,6 +471,7 @@ async function openChapter(path, scrollTop){
   const md = await getMd(path);
   const { front, body } = splitFront(md);
   state.current = path; state.front = front; state.body = body;
+  state.history = []; state.future = [];   // edit history is per-chapter
   localStorage.lastPath = path;
   renderReader();
   const m = meta(path);
@@ -269,6 +481,8 @@ async function openChapter(path, scrollTop){
   if(scrollTop) window.scrollTo(0,0);
   else { const y=+sessionStorage['scroll:'+path]||0; window.scrollTo(0,y); }
   updateNav();
+  updateUndoButtons();
+  if(state.pendingFind){ const q = state.pendingFind; state.pendingFind = null; highlightFind(q); }
 }
 
 function renderReader(){
@@ -287,6 +501,16 @@ function renderBlocks(){
     w.onclick = ()=> editBlock(w, i);
     r.appendChild(w);
   });
+  const add = document.createElement('button');
+  add.className='tb blk-add'; add.textContent='＋ Добавить абзац';
+  add.onclick = ()=> commitBody([...state.blocks, 'Новый абзац'].join('\n\n'), state.blocks.length);
+  r.appendChild(add);
+  // re-open an editor after an insert / move
+  if(state.pendingEdit != null){
+    const idx = state.pendingEdit; state.pendingEdit = null;
+    const el = r.children[idx];
+    if(el && el.classList.contains('blk')) editBlock(el, idx);
+  }
 }
 
 function autogrow(ta){ ta.style.height='auto'; ta.style.height = ta.scrollHeight+'px'; }
@@ -296,27 +520,73 @@ function showBlock(w, i){
   w.onclick = ()=> editBlock(w, i);
 }
 
+function mkbtn(text, cls){
+  const b = document.createElement('button');
+  b.className = 'tb' + (cls ? ' '+cls : ''); b.textContent = text; return b;
+}
+
 function editBlock(w, i){
   if(w.querySelector('textarea')) return;        // already editing
   w.className='blk'; w.onclick=null; w.innerHTML='';
   const ta = document.createElement('textarea');
   ta.className='edit-ta'; ta.value = state.blocks[i];
   const bar = document.createElement('div'); bar.className='edit-bar';
-  const save = document.createElement('button'); save.className='tb save'; save.textContent='Сохранить';
-  const cancel = document.createElement('button'); cancel.className='tb'; cancel.textContent='Отмена';
+  const save = mkbtn('Сохранить','save'), cancel = mkbtn('Отмена');
   bar.append(save, cancel);
-  w.append(ta, bar);
+  const ops = document.createElement('div'); ops.className='edit-bar ops';
+  const up = mkbtn('↑'), down = mkbtn('↓'), ins = mkbtn('＋ ниже'), del = mkbtn('Удалить','del');
+  up.disabled = i === 0; down.disabled = i === state.blocks.length-1;
+  ops.append(up, down, ins, del);
+  w.append(ta, bar, ops);
   autogrow(ta); ta.focus();
   ta.addEventListener('input', ()=>autogrow(ta));
-  cancel.onclick = e => { e.stopPropagation(); showBlock(w, i); };
-  save.onclick = async e => {
-    e.stopPropagation();
-    state.blocks[i] = ta.value;
-    state.body = state.blocks.join('\n\n');
-    showBlock(w, i);
-    await saveFile();
-  };
+
+  // helpers that build a fresh block array with the textarea's current value
+  const withEdit = () => { const nb=[...state.blocks]; nb[i]=ta.value; return nb; };
+  const stop = fn => e => { e.stopPropagation(); fn(); };
+
+  cancel.onclick = stop(()=> showBlock(w, i));
+  save.onclick   = stop(()=> commitBody(withEdit().join('\n\n')));
+  del.onclick    = stop(()=>{ const nb=[...state.blocks]; nb.splice(i,1); commitBody(nb.join('\n\n')); });
+  ins.onclick    = stop(()=>{ const nb=withEdit(); nb.splice(i+1,0,'Новый абзац'); commitBody(nb.join('\n\n'), i+1); });
+  up.onclick     = stop(()=>{ const nb=withEdit(); [nb[i-1],nb[i]]=[nb[i],nb[i-1]]; commitBody(nb.join('\n\n'), i-1); });
+  down.onclick   = stop(()=>{ const nb=withEdit(); [nb[i],nb[i+1]]=[nb[i+1],nb[i]]; commitBody(nb.join('\n\n'), i+1); });
 }
+
+// ---- undo / redo history ----
+function rerenderEditing(){
+  const y = window.scrollY; renderBlocks(); window.scrollTo(0, y); updateUndoButtons();
+}
+function commitBody(newBody, focusIdx){
+  state.history.push(state.body);
+  if(state.history.length > 100) state.history.shift();
+  state.future = [];
+  state.body = newBody;
+  state.pendingEdit = (focusIdx == null ? null : focusIdx);
+  rerenderEditing();
+  saveFile();
+}
+function undo(){
+  if(!state.history.length) return;
+  state.future.push(state.body);
+  state.body = state.history.pop();
+  rerenderEditing(); saveFile();
+}
+function redo(){
+  if(!state.future.length) return;
+  state.history.push(state.body);
+  state.body = state.future.pop();
+  rerenderEditing(); saveFile();
+}
+function updateUndoButtons(){
+  const show = state.editMode && state.canEdit;
+  $('#undo').style.display = show ? '' : 'none';
+  $('#redo').style.display = show ? '' : 'none';
+  $('#undo').disabled = !state.history.length;
+  $('#redo').disabled = !state.future.length;
+}
+$('#undo').onclick = undo;
+$('#redo').onclick = redo;
 
 async function saveFile(){
   try {
@@ -345,6 +615,7 @@ $('#edit').onclick = ()=>{
   const y = window.scrollY;
   renderReader();
   window.scrollTo(0, y);
+  updateUndoButtons();
   flash(state.editMode ? 'Нажмите на абзац, чтобы редактировать' : 'Готово');
 };
 
@@ -368,6 +639,7 @@ function showList(){
     $('#edit').classList.remove('on');
     document.body.classList.remove('editing');
   }
+  updateUndoButtons();
   renderList();
 }
 $('#back').onclick = showList;
