@@ -6,6 +6,8 @@ phone's browser. Zero dependencies — standard library only.
 
 Usage:  python3 server.py [port]
 """
+import datetime
+import glob
 import json
 import os
 import socket
@@ -15,7 +17,30 @@ from urllib.parse import urlparse, parse_qs, unquote
 
 BOOK_DIR = "/Users/dmitryalexeenko/Desktop/dev/kingdom-story/story"
 HERE = os.path.dirname(os.path.abspath(__file__))
+BACKUP_DIR = os.path.join(HERE, "backups")
+KEEP_BACKUPS = 30
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
+
+
+def make_backup(full_path, rel):
+    """Snapshot the current file before it is overwritten.
+
+    Saves a timestamped copy under backups/<rel>/ and keeps the newest
+    KEEP_BACKUPS. Skips silently if the file doesn't exist yet.
+    """
+    try:
+        with open(full_path, "r", encoding="utf-8") as fh:
+            old = fh.read()
+    except FileNotFoundError:
+        return
+    bdir = os.path.join(BACKUP_DIR, rel)
+    os.makedirs(bdir, exist_ok=True)
+    ts = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+    with open(os.path.join(bdir, ts + ".md"), "w", encoding="utf-8") as fh:
+        fh.write(old)
+    snaps = sorted(glob.glob(os.path.join(bdir, "*.md")))
+    for stale in snaps[:-KEEP_BACKUPS]:
+        os.remove(stale)
 
 
 def list_files():
@@ -89,8 +114,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(404, json.dumps({"error": "not found"}))
             length = int(self.headers.get("Content-Length", 0) or 0)
             data = self.rfile.read(length).decode("utf-8")
-            with open(full, "w", encoding="utf-8") as fh:
-                fh.write(data)
+            try:
+                with open(full, "r", encoding="utf-8") as fh:
+                    unchanged = fh.read() == data
+            except FileNotFoundError:
+                unchanged = False
+            if not unchanged:
+                make_backup(full, rel)          # safety snapshot before overwrite
+                with open(full, "w", encoding="utf-8") as fh:
+                    fh.write(data)
             return self._send(200, json.dumps({"ok": True}))
 
         return self._send(404, "not found", "text/plain")
