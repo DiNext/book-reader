@@ -120,6 +120,18 @@
   .empty { color: var(--ink-soft); text-align: center; margin-top: 3rem; }
   .reading { display: none; }
 
+  /* Inline "listen" button at the top of a chapter */
+  .listen-cta {
+    display: flex; align-items: center; gap: .55rem; width: 100%;
+    margin: .3rem 0 1.4rem; padding: .7rem .9rem;
+    font: inherit; font-size: .95rem; font-weight: 600; text-align: left;
+    color: var(--accent); background: var(--bg-soft);
+    border: 1px solid var(--accent); border-radius: 12px; cursor: pointer;
+  }
+  .listen-cta:active { background: var(--line); }
+  .listen-cta .lc-ico { font-size: 1.15rem; }
+  .listen-cta .lc-sub { margin-left: auto; font-weight: 400; font-size: .8rem; color: var(--ink-soft); }
+
   /* Inline editing */
   #edit.on { background: var(--accent); color: #2a1d09; }
   .blk { padding: .05rem .45rem; margin: 0 -.45rem; border-radius: 9px; }
@@ -476,7 +488,9 @@ function fmtTime(s){
 // Load (but don't autoplay) the current chapter's audio into the bar.
 function loadAudioForChapter(path){
   const num = chapterAudioNum(path);
-  audio.src = 'audio/ch' + num + '.mp3';
+  const src = 'audio/ch' + num + '.mp3';
+  if(audio.src && audio.src.endsWith(src)) return;   // already loaded for this chapter
+  audio.src = src;
   const saved = +localStorage['atime:'+path] || 0;
   audio.load();
   const seek = ()=>{ if(saved > 0 && saved < (audio.duration||Infinity)) audio.currentTime = saved; };
@@ -657,7 +671,20 @@ function updateProgressBar(){
 
 function renderReader(){
   if(state.editMode) renderBlocks();
-  else $('#reader').innerHTML = marked.parse(state.body);
+  else {
+    $('#reader').innerHTML = marked.parse(state.body);
+    if(state.current && hasAudio(state.current)) insertInlineListen();
+  }
+}
+
+// A prominent "listen to this chapter" button at the top of the reader.
+function insertInlineListen(){
+  const b = document.createElement('button');
+  b.className = 'listen-cta';
+  b.innerHTML = '<span class="lc-ico">🎧</span><span>Слушать главу</span>'
+              + '<span class="lc-sub">аудиокнига</span>';
+  b.onclick = ()=> openAudioBar(true);
+  $('#reader').prepend(b);
 }
 
 // ---- inline editing ----
