@@ -18,8 +18,21 @@ from urllib.parse import urlparse, parse_qs, unquote
 BOOK_DIR = "/Users/dmitryalexeenko/Desktop/dev/kingdom-story/story"
 HERE = os.path.dirname(os.path.abspath(__file__))
 BACKUP_DIR = os.path.join(HERE, "backups")
+AUDIO_DIR = os.path.join(HERE, "audio")
 KEEP_BACKUPS = 30
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
+
+
+def audio_manifest():
+    """Chapter numbers that have an audio file, e.g. ["01", "02"]."""
+    if not os.path.isdir(AUDIO_DIR):
+        return []
+    out = []
+    for f in sorted(os.listdir(AUDIO_DIR)):
+        m = f.lower()
+        if m.startswith("ch") and m.endswith(".mp3"):
+            out.append(f[2:-4])
+    return out
 
 
 def make_backup(full_path, rel):
@@ -81,6 +94,51 @@ class Handler(BaseHTTPRequestHandler):
         except FileNotFoundError:
             self._send(404, "not found", "text/plain")
 
+    def _send_media(self, path, ctype):
+        """Serve a (large) file honoring HTTP Range so audio can seek/stream."""
+        try:
+            size = os.path.getsize(path)
+        except OSError:
+            return self._send(404, "not found", "text/plain")
+
+        rng = self.headers.get("Range")
+        start, end = 0, size - 1
+        partial = False
+        if rng and rng.startswith("bytes="):
+            try:
+                s, e = rng[6:].split("-", 1)
+                start = int(s) if s else 0
+                end = int(e) if e else size - 1
+                end = min(end, size - 1)
+                if start <= end:
+                    partial = True
+            except ValueError:
+                partial = False
+
+        length = end - start + 1 if partial else size
+        self.send_response(206 if partial else 200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Length", str(length))
+        if partial:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        if self.command == "HEAD":
+            return
+        with open(path, "rb") as fh:
+            fh.seek(start)
+            remaining = length
+            while remaining > 0:
+                chunk = fh.read(min(65536, remaining))
+                if not chunk:
+                    break
+                try:
+                    self.wfile.write(chunk)
+                except (BrokenPipeError, ConnectionResetError):
+                    break  # client seeked/closed — normal for audio
+                remaining -= len(chunk)
+
     def do_GET(self):
         u = urlparse(self.path)
         route = u.path
@@ -95,6 +153,18 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/api/files":
             return self._send(200, json.dumps(list_files()))
 
+        if route == "/audio.json":
+            return self._send(200, json.dumps(audio_manifest()))
+
+        if route.startswith("/audio/"):
+            name = os.path.basename(unquote(route[len("/audio/"):]))
+            if not name.lower().endswith(".mp3"):
+                return self._send(404, "not found", "text/plain")
+            full = os.path.join(AUDIO_DIR, name)
+            if not os.path.isfile(full):
+                return self._send(404, "not found", "text/plain")
+            return self._send_media(full, "audio/mpeg")
+
         if route == "/api/file":
             rel = unquote(parse_qs(u.query).get("path", [""])[0])
             full = safe_path(rel)
@@ -104,6 +174,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, fh.read(), "text/markdown; charset=utf-8")
 
         return self._send(404, "not found", "text/plain")
+
+    def do_HEAD(self):
+        route = urlparse(self.path).path
+        if route.startswith("/audio/"):
+            name = os.path.basename(unquote(route[len("/audio/"):]))
+            full = os.path.join(AUDIO_DIR, name)
+            if name.lower().endswith(".mp3") and os.path.isfile(full):
+                return self._send_media(full, "audio/mpeg")
+        self.send_response(404)
+        self.end_headers()
 
     def do_PUT(self):
         u = urlparse(self.path)

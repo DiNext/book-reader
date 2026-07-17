@@ -13,7 +13,7 @@ import json
 import os
 import shutil
 
-from server import BOOK_DIR, HERE, list_files
+from server import AUDIO_DIR, BOOK_DIR, HERE, audio_manifest, list_files
 
 OUT = os.path.join(HERE, "docs")
 
@@ -41,11 +41,21 @@ def main():
     with open(os.path.join(OUT, "files.json"), "w", encoding="utf-8") as fh:
         json.dump(files, fh)
 
+    # Audiobook → docs/audio/chNN.mp3, plus a manifest of chapters that have it.
+    audio = audio_manifest()
+    if audio:
+        os.makedirs(os.path.join(OUT, "audio"), exist_ok=True)
+        for num in audio:
+            shutil.copy2(os.path.join(AUDIO_DIR, f"ch{num}.mp3"),
+                         os.path.join(OUT, "audio", f"ch{num}.mp3"))
+    with open(os.path.join(OUT, "audio.json"), "w", encoding="utf-8") as fh:
+        json.dump(audio, fh)
+
     # Stop Jekyll from processing/ignoring the files.
     open(os.path.join(OUT, ".nojekyll"), "w").close()
 
     print(f"Built static site → {OUT}")
-    print(f"  {len(files)} chapters, edit disabled (read-only).")
+    print(f"  {len(files)} chapters, {len(audio)} with audio, edit disabled (read-only).")
     print("  Commit & push, then set GitHub Pages source to: main /docs")
 
 

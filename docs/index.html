@@ -215,6 +215,22 @@
   }
   footer.show { display: flex; }
   footer button { flex: 1; max-width: 11rem; }
+
+  /* Audio player bar (sits just above the nav footer) */
+  #audio-bar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 12;
+    display: none; align-items: center; gap: .55rem;
+    padding: .5rem .85rem max(.5rem, env(safe-area-inset-bottom));
+    background: var(--bar); backdrop-filter: blur(8px);
+    border-top: 1px solid var(--line);
+  }
+  #audio-bar.show { display: flex; }
+  body.audio-open footer.show { bottom: calc(3.3rem + env(safe-area-inset-bottom)); }
+  body.audio-open main { padding-bottom: 9rem; }
+  #audio-bar #a-play { flex: 0 0 auto; min-width: 2.4rem; font-size: 1rem; }
+  #audio-bar #a-rate, #audio-bar #a-close { flex: 0 0 auto; }
+  #audio-bar .a-time { flex: 0 0 auto; font-size: .74rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  #a-seek { flex: 1; min-width: 0; accent-color: var(--accent); }
 </style>
 </head>
 <body>
@@ -224,6 +240,7 @@
   <button class="tb" id="undo" style="display:none" title="Отменить">↶</button>
   <button class="tb" id="redo" style="display:none" title="Повторить">↷</button>
   <button class="tb" id="search" title="Поиск">🔍</button>
+  <button class="tb" id="listen" style="display:none" title="Слушать">🎧</button>
   <button class="tb" id="edit" style="display:none" title="Редактировать">✎</button>
   <button class="tb" id="cog" title="Настройки">⚙</button>
 </header>
@@ -234,6 +251,16 @@
   <div id="list"></div>
   <article id="reader" class="reading"></article>
 </main>
+
+<div id="audio-bar">
+  <button class="tb" id="a-play" aria-label="Играть">▶</button>
+  <span class="a-time" id="a-cur">0:00</span>
+  <input type="range" id="a-seek" min="0" max="1000" value="0">
+  <span class="a-time" id="a-dur">0:00</span>
+  <button class="tb" id="a-rate">1×</button>
+  <button class="tb" id="a-close" aria-label="Закрыть">✕</button>
+  <audio id="audio" preload="metadata"></audio>
+</div>
 
 <footer id="nav">
   <button class="tb" id="prev">‹ Пред.</button>
@@ -289,7 +316,8 @@ const BOOK_TITLE = 'Еретик';
 const state = { files: [], lang: LANG,
                 current: null, front: '', body: '', blocks: [], editMode: false,
                 canEdit: false, cache: {}, titles: {},
-                history: [], future: [], pendingEdit: null, pendingFind: null };
+                history: [], future: [], pendingEdit: null, pendingFind: null,
+                audioList: [] };
 
 // Use the local server's API when available (editing enabled); otherwise fall
 // back to the static files shipped to GitHub Pages (read-only).
@@ -432,6 +460,75 @@ addEventListener('keydown', e=>{
   if(e.key === 'Escape'){ closeSearch(); $('#cog-ov').classList.remove('open'); }
 });
 
+// ---- audiobook ----
+const audio = $('#audio');
+const RATES = [1, 1.25, 1.5, 1.75, 2];
+
+function chapterAudioNum(path){ const n = meta(path).num; return n ? String(n).padStart(2,'0') : ''; }
+function hasAudio(path){ const n = chapterAudioNum(path); return n && state.audioList.includes(n); }
+
+function fmtTime(s){
+  if(!isFinite(s) || s < 0) s = 0;
+  const m = Math.floor(s/60), sec = Math.floor(s%60);
+  return m + ':' + String(sec).padStart(2,'0');
+}
+
+// Load (but don't autoplay) the current chapter's audio into the bar.
+function loadAudioForChapter(path){
+  const num = chapterAudioNum(path);
+  audio.src = 'audio/ch' + num + '.mp3';
+  const saved = +localStorage['atime:'+path] || 0;
+  audio.load();
+  const seek = ()=>{ if(saved > 0 && saved < (audio.duration||Infinity)) audio.currentTime = saved; };
+  if(audio.readyState >= 1) seek();
+  else audio.addEventListener('loadedmetadata', seek, {once:true});
+  const r = +localStorage.arate || 1;
+  audio.playbackRate = r;
+  $('#a-rate').textContent = (RATES.includes(r) ? r : 1) + '×';
+}
+
+function openAudioBar(autoplay){
+  if(!state.current || !hasAudio(state.current)) return;
+  $('#audio-bar').classList.add('show');
+  document.body.classList.add('audio-open');
+  loadAudioForChapter(state.current);
+  if(autoplay) audio.play().catch(()=>{});
+}
+function closeAudioBar(){
+  audio.pause();
+  $('#audio-bar').classList.remove('show');
+  document.body.classList.remove('audio-open');
+}
+
+$('#listen').onclick = ()=>{
+  if($('#audio-bar').classList.contains('show')) closeAudioBar();
+  else openAudioBar(true);
+};
+$('#a-close').onclick = closeAudioBar;
+$('#a-play').onclick = ()=>{ if(audio.paused) audio.play().catch(()=>{}); else audio.pause(); };
+
+audio.addEventListener('play',  ()=> $('#a-play').textContent = '❚❚');
+audio.addEventListener('pause', ()=> $('#a-play').textContent = '▶');
+audio.addEventListener('loadedmetadata', ()=> $('#a-dur').textContent = fmtTime(audio.duration));
+audio.addEventListener('timeupdate', ()=>{
+  $('#a-cur').textContent = fmtTime(audio.currentTime);
+  if(!seeking && audio.duration) $('#a-seek').value = (audio.currentTime/audio.duration)*1000;
+  if(state.current) localStorage['atime:'+state.current] = audio.currentTime;
+});
+audio.addEventListener('ended', ()=>{ if(state.current) localStorage['atime:'+state.current] = 0; });
+
+let seeking = false;
+$('#a-seek').addEventListener('input', ()=> seeking = true);
+$('#a-seek').addEventListener('change', ()=>{
+  if(audio.duration) audio.currentTime = (+$('#a-seek').value/1000)*audio.duration;
+  seeking = false;
+});
+$('#a-rate').onclick = ()=>{
+  const i = RATES.indexOf(audio.playbackRate);
+  const r = RATES[(i+1) % RATES.length];
+  audio.playbackRate = r; localStorage.arate = r; $('#a-rate').textContent = r + '×';
+};
+
 // path -> {lang, act, num, name, path}
 function meta(p){
   const seg = p.split('/');
@@ -446,6 +543,8 @@ function meta(p){
 
 async function boot(){
   state.files = await loadFiles();
+  try { state.audioList = await (await fetch('audio.json')).json(); }
+  catch(e){ state.audioList = []; }
   await buildToc();
   renderList();
   // restore last read (only if it belongs to the Russian edition)
@@ -539,6 +638,11 @@ async function openChapter(path, scrollTop){
   updateNav();
   updateUndoButtons();
   updateProgressBar();
+  // audiobook: show 🎧 only when this chapter has audio; keep the bar in sync
+  $('#listen').style.display = hasAudio(path) ? '' : 'none';
+  if($('#audio-bar').classList.contains('show')){
+    if(hasAudio(path)) openAudioBar(false); else closeAudioBar();
+  }
   if(state.pendingFind){ const q = state.pendingFind; state.pendingFind = null; highlightFind(q); }
 }
 
@@ -698,6 +802,8 @@ function showList(){
   $('#list').style.display='block';
   $('#back').style.display='none';
   $('#edit').style.display='none';
+  $('#listen').style.display='none';
+  closeAudioBar();
   $('#nav').classList.remove('show');
   $('#progress').classList.remove('show');
   $('#title').textContent=BOOK_TITLE;
