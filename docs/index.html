@@ -81,9 +81,11 @@
     border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
   .book-prog .bp-fill { height: 100%; background: var(--accent); }
   .act-head {
-    margin: 1.8rem 0 .5rem; font-size: .78rem; letter-spacing: .12em;
+    display: flex; align-items: center; gap: .6rem;
+    margin: 1.8rem 0 .6rem; font-size: .78rem; letter-spacing: .12em;
     text-transform: uppercase; color: var(--accent);
   }
+  .act-head::after { content: ""; flex: 1; height: 1px; background: var(--line); }
   a.chapter {
     display: block; text-decoration: none; color: var(--ink);
     padding: .85rem 1rem; margin: .45rem 0;
@@ -364,10 +366,15 @@ function titleFromMd(md, fallback){
   if(parts.length > 1 && /глава/i.test(parts[0])) t = parts.slice(1).join(' — ').trim();
   return t || fallback;
 }
-// "act-1" → "Часть 1"
-function actLabel(act){
-  const n = (act.match(/\d+/) || [])[0];
-  return n ? 'Часть ' + n : act;
+// Chapter numbers that open a new part. Everything is filed under act-1 on
+// disk, so the second arc is marked by chapter number, not by folder.
+const PART_STARTS = [1, 30];
+function partNum(m){
+  const fromAct = +(m.act.match(/\d+/) || [])[0] || 0;
+  if(fromAct > 1) return fromAct;              // a real act-N folder wins
+  let p = 1;
+  PART_STARTS.forEach((start, i) => { if(+m.num >= start) p = i + 1; });
+  return p;
 }
 
 // ---- settings: theme, font, size ----
@@ -606,11 +613,12 @@ function renderList(){
   bp.innerHTML = `Прочитано ${overall}%<div class="bp-track"><div class="bp-fill" style="width:${overall}%"></div></div>`;
   list.appendChild(bp);
 
-  let lastAct = null;
+  let lastPart = null;
   items.forEach(m=>{
-    if(m.act !== lastAct){
-      lastAct = m.act;
-      if(m.act){ const h=document.createElement('div'); h.className='act-head'; h.textContent=actLabel(m.act); list.appendChild(h); }
+    const part = partNum(m);
+    if(part !== lastPart){
+      lastPart = part;
+      if(m.act){ const h=document.createElement('div'); h.className='act-head'; h.textContent='Часть '+part; list.appendChild(h); }
     }
     const a = document.createElement('a');
     a.className='chapter'; a.href='#';
